@@ -12,9 +12,14 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    private final JwtService jwtService;
+
+    public AuthService(UserRepository userRepository,
+                       PasswordEncoder passwordEncoder,
+                       JwtService jwtService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
     }
 
     public String register(RegisterRequest request) {
@@ -30,7 +35,7 @@ public class AuthService {
         return "User registered";
     }
 
-    public String login(LoginRequest request) {
+    public LoginResponse login(LoginRequest request) {
 
         User user = userRepository.findByUsername(request.username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -39,6 +44,15 @@ public class AuthService {
             throw new RuntimeException("Invalid password");
         }
 
-        return "Login success"; // JWT après
+        // 🔐 temporaire
+        String token = jwtService.generateToken(user.getUsername());
+
+        return new LoginResponse(
+                token,
+                86400000,
+                user.getId(),
+                user.getEmail(),
+                user.getRole()
+        );
     }
 }
