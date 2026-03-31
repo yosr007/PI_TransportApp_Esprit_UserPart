@@ -19,8 +19,8 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register").permitAll()
-                        .anyRequest().permitAll() // 🔥 TEMP pour test
+                        .requestMatchers("/api/v1/auth/**").permitAll() // ✅ PRO VERSION
+                        .anyRequest().permitAll() // 🔥 TEMP (on sécurisera après)
                 )
                 .httpBasic(httpBasic -> httpBasic.disable())
                 .formLogin(form -> form.disable());
