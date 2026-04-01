@@ -1,8 +1,12 @@
 package com.ticketapp.projetpi.service;
 
-import com.ticketapp.projetpi.entity.User;
-import com.ticketapp.projetpi.repository.UserRepository;
 import com.ticketapp.projetpi.dto.*;
+import com.ticketapp.projetpi.entity.Role;
+import com.ticketapp.projetpi.entity.User;
+import com.ticketapp.projetpi.exception.EmailAlreadyExistsException;
+import com.ticketapp.projetpi.exception.InvalidCredentialsException;
+import com.ticketapp.projetpi.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -11,8 +15,10 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-
     private final JwtService jwtService;
+
+    @Value("${jwt.expiration}")
+    private long expiration;
 
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
@@ -22,37 +28,33 @@ public class AuthService {
         this.jwtService = jwtService;
     }
 
-    public String register(RegisterRequest request) {
+    public AuthResponse register(RegisterRequest request) {
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new EmailAlreadyExistsException(request.getEmail());
+        }
 
         User user = new User();
-        user.setUsername(request.username);
-        user.setEmail(request.email);
-        user.setPassword(passwordEncoder.encode(request.password));
-        user.setRole("USER");
+        user.setUsername(request.getUsername());
+        user.setEmail(request.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setPhone(request.getPhone());
+        user.setRole(Role.USER);
 
         userRepository.save(user);
 
-        return "User registered";
+        String token = jwtService.generateToken(user);
+        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name());
     }
 
-    public LoginResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(InvalidCredentialsException::new);
 
-        User user = userRepository.findByUsername(request.username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        if (!passwordEncoder.matches(request.password, user.getPassword())) {
-            throw new RuntimeException("Invalid password");
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new InvalidCredentialsException();
         }
 
-        // 🔐 temporaire
-        String token = jwtService.generateToken(user.getUsername());
-
-        return new LoginResponse(
-                token,
-                86400000,
-                user.getId(),
-                user.getEmail(),
-                user.getRole()
-        );
+        String token = jwtService.generateToken(user);
+        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name());
     }
 }

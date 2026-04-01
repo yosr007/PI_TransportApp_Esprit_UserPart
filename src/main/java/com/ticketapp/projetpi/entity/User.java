@@ -1,26 +1,46 @@
 package com.ticketapp.projetpi.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
-@Data
+@Table(name = "users", indexes = {
+        @Index(name = "idx_user_email", columnList = "email", unique = true)
+})
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(updatable = false, nullable = false)
+    private UUID id;
 
     private String username;
+
+    @Column(nullable = false, unique = true)
     private String email;
+
+    @Column(nullable = false)
     private String password;
-    private String role;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Role role;
 
+    private String phone;
+
+    @CreationTimestamp
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
 }
-

@@ -1,13 +1,19 @@
 package com.ticketapp.projetpi.controller;
 
-import com.ticketapp.projetpi.service.JwtService;
-import org.springframework.web.bind.annotation.*;
-import com.ticketapp.projetpi.service.AuthService;
 import com.ticketapp.projetpi.dto.*;
+import com.ticketapp.projetpi.exception.InvalidCredentialsException;
+import com.ticketapp.projetpi.service.AuthService;
+import com.ticketapp.projetpi.service.JwtService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/auth")
-@CrossOrigin("*")
 public class AuthController {
 
     private final AuthService authService;
@@ -19,23 +25,32 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public String register(@RequestBody RegisterRequest request) {
-        return authService.register(request);
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
     }
 
     @PostMapping("/login")
-    public LoginResponse login(@RequestBody LoginRequest request) {
-        return authService.login(request);
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+        return ResponseEntity.ok(authService.login(request));
     }
-    @GetMapping("/validate")
-    public String validate(@RequestHeader("Authorization") String header) {
 
+    @GetMapping("/validate")
+    public ResponseEntity<Map<String, Object>> validate(@RequestHeader("Authorization") String header) {
         String token = header.replace("Bearer ", "");
 
-        if (jwtService.isTokenValid(token)) {
-            return jwtService.extractUsername(token);
+        if (!jwtService.isTokenValid(token)) {
+            throw new InvalidCredentialsException();
         }
 
-        throw new RuntimeException("Invalid token");
+        UUID userId = jwtService.extractUserId(token);
+        String email = jwtService.extractEmail(token);
+        String role  = jwtService.extractRole(token);
+
+        return ResponseEntity.ok(Map.of(
+                "valid",  true,
+                "userId", userId,
+                "email",  email,
+                "role",   role
+        ));
     }
 }
