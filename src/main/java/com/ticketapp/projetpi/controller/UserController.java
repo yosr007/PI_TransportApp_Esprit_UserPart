@@ -4,9 +4,11 @@ import com.ticketapp.projetpi.dto.UpdateUserRequest;
 import com.ticketapp.projetpi.dto.UserResponse;
 import com.ticketapp.projetpi.service.UserService;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -49,11 +51,12 @@ public class UserController {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
-    @PutMapping("/{id}")
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<UserResponse> updateUser(@PathVariable UUID id,
-                                                   @Valid @RequestBody UpdateUserRequest request) {
-        return ResponseEntity.ok(userService.updateUser(id, request));
+                                                   @RequestPart("user") @Valid UpdateUserRequest request,
+                                                   @RequestPart(value = "file", required = false) MultipartFile file) {
+        return ResponseEntity.ok(userService.updateUser(id, request, file));
     }
 
     @DeleteMapping("/{id}")
@@ -61,5 +64,11 @@ public class UserController {
     public ResponseEntity<Void> deleteUser(@PathVariable UUID id) {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/profile-pic")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<UserResponse> deleteProfilePic(@PathVariable UUID id) {
+        return ResponseEntity.ok(userService.deleteProfilePic(id));
     }
 }

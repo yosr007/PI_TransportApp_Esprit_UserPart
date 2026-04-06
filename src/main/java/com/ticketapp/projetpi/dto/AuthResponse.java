@@ -16,6 +16,16 @@ public class AuthResponse {
     private UUID userId;
     private String email;
     private String role;
+    private String profilePic;
+
+    public AuthResponse(String token, long expiresIn, UUID userId, String email, String role, String profilePic) {
+        this.token = token;
+        this.expiresIn = expiresIn;
+        this.userId = userId;
+        this.email = email;
+        this.role = role;
+        this.profilePic = profilePic;
+    }
 
     public AuthResponse(String token, long expiresIn, UUID userId, String email, String role) {
         this.token = token;

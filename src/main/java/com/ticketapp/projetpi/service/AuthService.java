@@ -16,19 +16,22 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final FileStorageService fileStorageService;
 
     @Value("${jwt.expiration}")
     private long expiration;
 
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
-                       JwtService jwtService) {
+                       JwtService jwtService,
+                       FileStorageService fileStorageService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.fileStorageService = fileStorageService;
     }
 
-    public AuthResponse register(RegisterRequest request) {
+    public AuthResponse register(RegisterRequest request, org.springframework.web.multipart.MultipartFile profilePicFile) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new EmailAlreadyExistsException(request.getEmail());
         }
@@ -38,12 +41,22 @@ public class AuthService {
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setPhone(request.getPhone());
+        
+        // Handle file upload
+        if (profilePicFile != null && !profilePicFile.isEmpty()) {
+            String filePath = fileStorageService.storeFile(profilePicFile);
+            user.setProfilePic(filePath);
+        } else if (request.getProfilePic() != null) {
+            // Support existing URL/base64 path if no file is uploaded
+            user.setProfilePic(request.getProfilePic());
+        }
+
         user.setRole(Role.USER);
 
         userRepository.save(user);
 
         String token = jwtService.generateToken(user);
-        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name());
+        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic());
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -55,6 +68,6 @@ public class AuthService {
         }
 
         String token = jwtService.generateToken(user);
-        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name());
+        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic());
     }
 }

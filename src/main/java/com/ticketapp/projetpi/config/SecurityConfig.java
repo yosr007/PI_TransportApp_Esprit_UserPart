@@ -37,11 +37,12 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .cors(cors -> cors.disable()) // 👈 désactive CORS dans auth-service
+                .cors(cors -> cors.disable()) // 👈 désactivé car déjà géré par l'API Gateway
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers("/api/v1/users/me").authenticated()
                         .anyRequest().authenticated()
                 )

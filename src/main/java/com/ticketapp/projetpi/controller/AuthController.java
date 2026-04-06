@@ -6,8 +6,10 @@ import com.ticketapp.projetpi.service.AuthService;
 import com.ticketapp.projetpi.service.JwtService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 import java.util.UUID;
@@ -24,9 +26,11 @@ public class AuthController {
         this.jwtService = jwtService;
     }
 
-    @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+    @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<AuthResponse> register(
+            @RequestPart("user") @Valid RegisterRequest request,
+            @RequestPart(value = "file", required = false) MultipartFile file) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request, file));
     }
 
     @PostMapping("/login")

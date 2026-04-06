@@ -36,6 +36,8 @@ public class User {
     private Role role;
 
     private String phone;
+    
+    private String profilePic;
 
     @CreationTimestamp
     @Column(updatable = false)
