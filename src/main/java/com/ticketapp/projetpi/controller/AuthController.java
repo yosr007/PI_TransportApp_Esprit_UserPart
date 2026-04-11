@@ -38,6 +38,11 @@ public class AuthController {
         return ResponseEntity.ok(authService.login(request));
     }
 
+    @PostMapping("/google")
+    public ResponseEntity<AuthResponse> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
+        return ResponseEntity.ok(authService.googleLogin(request));
+    }
+
     @GetMapping("/validate")
     public ResponseEntity<Map<String, Object>> validate(@RequestHeader("Authorization") String header) {
         String token = header.replace("Bearer ", "");

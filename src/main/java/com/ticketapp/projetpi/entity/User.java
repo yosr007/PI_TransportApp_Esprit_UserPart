@@ -40,6 +40,9 @@ public class User {
     private String profilePic;
     
     @Column(nullable = false)
+    private String provider = "LOCAL";
+    
+    @Column(nullable = false)
     private boolean enabled = true;
 
     @CreationTimestamp
