@@ -56,7 +56,7 @@ public class AuthService {
         userRepository.save(user);
 
         String token = jwtService.generateToken(user);
-        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic());
+        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername());
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -67,7 +67,11 @@ public class AuthService {
             throw new InvalidCredentialsException();
         }
 
+        if (!user.isEnabled()) {
+            throw new RuntimeException("Account is blocked. Please contact admin.");
+        }
+
         String token = jwtService.generateToken(user);
-        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic());
+        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername());
     }
 }

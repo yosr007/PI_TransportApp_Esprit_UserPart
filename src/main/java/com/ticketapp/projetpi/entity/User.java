@@ -38,6 +38,9 @@ public class User {
     private String phone;
     
     private String profilePic;
+    
+    @Column(nullable = false)
+    private boolean enabled = true;
 
     @CreationTimestamp
     @Column(updatable = false)

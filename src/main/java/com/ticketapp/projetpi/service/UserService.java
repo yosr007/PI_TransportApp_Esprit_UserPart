@@ -90,6 +90,13 @@ public class UserService {
         return toResponse(savedUser);
     }
 
+    public UserResponse toggleUserStatus(UUID id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException(id));
+        user.setEnabled(!user.isEnabled());
+        return toResponse(userRepository.save(user));
+    }
+
     // ── Delete ──────────────────────────────────────────────────────────────
 
     public void deleteUser(UUID id) {
@@ -113,6 +120,7 @@ public class UserService {
                 user.getPhone(),
                 user.getRole().name(),
                 user.getProfilePic(),
+                user.isEnabled(),
                 user.getCreatedAt(),
                 user.getUpdatedAt()
         );

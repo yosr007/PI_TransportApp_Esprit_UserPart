@@ -1,4 +1,5 @@
 package com.ticketapp.projetpi.controller;
+import java.util.List;
 
 import com.ticketapp.projetpi.dto.UpdateUserRequest;
 import com.ticketapp.projetpi.dto.UserResponse;
@@ -45,12 +46,6 @@ public class UserController {
         return ResponseEntity.ok(userService.getUserByEmail(email));
     }
 
-    @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<UserResponse>> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsers());
-    }
-
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<UserResponse> updateUser(@PathVariable UUID id,
@@ -70,5 +65,17 @@ public class UserController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<UserResponse> deleteProfilePic(@PathVariable UUID id) {
         return ResponseEntity.ok(userService.deleteProfilePic(id));
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<UserResponse>> getAllUsers() {
+        return ResponseEntity.ok(userService.getAllUsers());
+    }
+
+    @PatchMapping("/{id}/toggle-status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserResponse> toggleStatus(@PathVariable UUID id) {
+        return ResponseEntity.ok(userService.toggleUserStatus(id));
     }
 }
