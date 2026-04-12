@@ -74,7 +74,8 @@ public class AuthController {
     public ResponseEntity<Void> logout(@RequestHeader("Authorization") String header) {
         String token = header.replace("Bearer ", "");
         String email = jwtService.extractEmail(token);
-        authService.logout(email);
+        String jti = jwtService.extractJti(token);
+        authService.logout(email, jti);
         return ResponseEntity.noContent().build();
     }
 

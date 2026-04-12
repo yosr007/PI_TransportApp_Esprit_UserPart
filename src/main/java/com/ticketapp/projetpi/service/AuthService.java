@@ -30,6 +30,8 @@ public class AuthService {
     private final JwtService jwtService;
     private final FileStorageService fileStorageService;
     private final JavaMailSender mailSender;
+    private final SessionService sessionService;
+    private final jakarta.servlet.http.HttpServletRequest request;
 
     @Value("${jwt.expiration}")
     private long expiration;
@@ -41,12 +43,16 @@ public class AuthService {
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
                        FileStorageService fileStorageService,
-                       JavaMailSender mailSender) {
+                       JavaMailSender mailSender,
+                       SessionService sessionService,
+                       jakarta.servlet.http.HttpServletRequest request) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.fileStorageService = fileStorageService;
         this.mailSender = mailSender;
+        this.sessionService = sessionService;
+        this.request = request;
     }
 
     public AuthResponse register(RegisterRequest request, org.springframework.web.multipart.MultipartFile profilePicFile) {
@@ -73,7 +79,10 @@ public class AuthService {
 
         userRepository.save(user);
 
-        String token = jwtService.generateToken(user);
+        String jti = UUID.randomUUID().toString();
+        sessionService.createSession(user, jti, this.request);
+
+        String token = jwtService.generateToken(user, jti);
         return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername());
     }
 
@@ -122,7 +131,10 @@ public class AuthService {
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
         
-        String token = jwtService.generateToken(user);
+        String jti = UUID.randomUUID().toString();
+        sessionService.createSession(user, jti, this.request);
+        
+        String token = jwtService.generateToken(user, jti);
         return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername());
     }
 
@@ -153,15 +165,21 @@ public class AuthService {
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
 
-        String token = jwtService.generateToken(user);
+        String jti = UUID.randomUUID().toString();
+        sessionService.createSession(user, jti, this.request);
+
+        String token = jwtService.generateToken(user, jti);
         return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername());
     }
 
-    public void logout(String email) {
+    public void logout(String email, String jti) {
         User user = userRepository.findByEmail(email).orElse(null);
         if (user != null) {
             user.setLastLogoutAt(LocalDateTime.now());
             userRepository.save(user);
+        }
+        if (jti != null) {
+            sessionService.revokeByJti(jti);
         }
     }
 
@@ -201,16 +219,16 @@ public class AuthService {
         userRepository.save(user);
     }
 
-    public AuthResponse googleLogin(GoogleLoginRequest request) {
+    public AuthResponse googleLogin(GoogleLoginRequest googleRequest) {
         String clientId = "619356278570-78j5d2dh4sumdou8ebdd4d5ijpqv8kkh.apps.googleusercontent.com";
         GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
                 .setAudience(Collections.singletonList(clientId))
                 .build();
 
         try {
-            GoogleIdToken idToken = verifier.verify(request.getIdToken());
+            GoogleIdToken idToken = verifier.verify(googleRequest.getIdToken());
             if (idToken == null) {
-                throw new InvalidCredentialsException();
+                throw new RuntimeException("Invalid ID Token");
             }
 
             GoogleIdToken.Payload payload = idToken.getPayload();
@@ -243,7 +261,10 @@ public class AuthService {
                 }
             }
 
-            String token = jwtService.generateToken(user);
+            String jti = UUID.randomUUID().toString();
+            sessionService.createSession(user, jti, this.request);
+
+            String token = jwtService.generateToken(user, jti);
             return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername());
 
         } catch (Exception e) {

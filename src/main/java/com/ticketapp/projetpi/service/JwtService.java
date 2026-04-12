@@ -21,9 +21,10 @@ public class JwtService {
 
     // ── Generate ────────────────────────────────────────────────────────────
 
-    public String generateToken(User user) {
+    public String generateToken(User user, String jti) {
         return Jwts.builder()
                 .subject(user.getId().toString())           // sub = UUID
+                .id(jti)                                   // jti = unique session ID
                 .claim("email",    user.getEmail())
                 .claim("username", user.getUsername())
                 .claim("role",     user.getRole().name())
@@ -50,6 +51,10 @@ public class JwtService {
     // kept for any legacy call still using username-based lookup
     public String extractUsername(String token) {
         return extractClaims(token).get("username", String.class);
+    }
+
+    public String extractJti(String token) {
+        return extractClaims(token).getId();
     }
 
     // ── Validation ──────────────────────────────────────────────────────────
