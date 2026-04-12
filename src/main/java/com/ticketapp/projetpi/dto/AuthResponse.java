@@ -18,6 +18,12 @@ public class AuthResponse {
     private String role;
     private String profilePic;
     private String username;
+    private boolean mfaRequired = false;
+
+    public AuthResponse(String mfaEmail, boolean mfaRequired) {
+        this.email = mfaEmail;
+        this.mfaRequired = mfaRequired;
+    }
 
     public AuthResponse(String token, long expiresIn, UUID userId, String email, String role, String profilePic, String username) {
         this.token = token;

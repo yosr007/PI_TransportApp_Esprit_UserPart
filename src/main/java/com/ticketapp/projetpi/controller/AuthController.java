@@ -62,4 +62,19 @@ public class AuthController {
                 "role",   role
         ));
     }
+
+    @PostMapping("/verify-mfa")
+    public ResponseEntity<AuthResponse> verifyMfa(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        String code = request.get("code");
+        return ResponseEntity.ok(authService.verifyMfa(email, code));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@RequestHeader("Authorization") String header) {
+        String token = header.replace("Bearer ", "");
+        String email = jwtService.extractEmail(token);
+        authService.logout(email);
+        return ResponseEntity.noContent().build();
+    }
 }

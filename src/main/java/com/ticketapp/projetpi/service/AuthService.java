@@ -11,10 +11,15 @@ import com.ticketapp.projetpi.exception.EmailAlreadyExistsException;
 import com.ticketapp.projetpi.exception.InvalidCredentialsException;
 import com.ticketapp.projetpi.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.Random;
 import java.util.UUID;
 
 @Service
@@ -24,18 +29,24 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final FileStorageService fileStorageService;
+    private final JavaMailSender mailSender;
 
     @Value("${jwt.expiration}")
     private long expiration;
 
+    @Value("${spring.mail.from}")
+    private String fromEmail;
+
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
-                       FileStorageService fileStorageService) {
+                       FileStorageService fileStorageService,
+                       JavaMailSender mailSender) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.fileStorageService = fileStorageService;
+        this.mailSender = mailSender;
     }
 
     public AuthResponse register(RegisterRequest request, org.springframework.web.multipart.MultipartFile profilePicFile) {
@@ -78,8 +89,80 @@ public class AuthService {
             throw new RuntimeException("Account is blocked. Please contact admin.");
         }
 
+        // --- 2FA Logic ---
+        boolean isMfaRequired = false;
+
+        // Skip 2FA for ADMIN
+        if (!user.getRole().equals(Role.ADMIN)) {
+            // Rule 1: First login (lastLoginAt is null)
+            if (user.getLastLoginAt() == null) {
+                isMfaRequired = true;
+            } 
+            // Rule 2: Pass more than 15 mins logged out
+            else if (user.getLastLogoutAt() != null) {
+                long minutesSinceLogout = Duration.between(user.getLastLogoutAt(), LocalDateTime.now()).toMinutes();
+                if (minutesSinceLogout >= 15) {
+                    isMfaRequired = true;
+                }
+            }
+        }
+
+        if (isMfaRequired) {
+            String otp = String.format("%06d", new Random().nextInt(999999));
+            user.setMfaCode(otp);
+            user.setMfaExpiresAt(LocalDateTime.now().plusMinutes(10));
+            userRepository.save(user);
+
+            sendOtpEmail(user.getEmail(), otp);
+
+            return new AuthResponse(user.getEmail(), true);
+        }
+
+        // Standard Login
+        user.setLastLoginAt(LocalDateTime.now());
+        userRepository.save(user);
+        
         String token = jwtService.generateToken(user);
         return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername());
+    }
+
+    private void sendOtpEmail(String email, String otp) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(fromEmail);
+        message.setTo(email);
+        message.setSubject("Your Login Verification Code");
+        message.setText("Your verification code is: " + otp + "\nThis code will expire in 10 minutes.");
+        mailSender.send(message);
+    }
+
+    public AuthResponse verifyMfa(String email, String code) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(InvalidCredentialsException::new);
+
+        if (user.getMfaCode() == null || !user.getMfaCode().equals(code)) {
+            throw new InvalidCredentialsException();
+        }
+
+        if (user.getMfaExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("OTP expired");
+        }
+
+        // Reset MFA and update login time
+        user.setMfaCode(null);
+        user.setMfaExpiresAt(null);
+        user.setLastLoginAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        String token = jwtService.generateToken(user);
+        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername());
+    }
+
+    public void logout(String email) {
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user != null) {
+            user.setLastLogoutAt(LocalDateTime.now());
+            userRepository.save(user);
+        }
     }
 
     public AuthResponse googleLogin(GoogleLoginRequest request) {

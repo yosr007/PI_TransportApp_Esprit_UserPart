@@ -45,6 +45,11 @@ public class User {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    private LocalDateTime lastLoginAt;
+    private LocalDateTime lastLogoutAt;
+    private String mfaCode;
+    private LocalDateTime mfaExpiresAt;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
