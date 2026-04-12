@@ -165,6 +165,42 @@ public class AuthService {
         }
     }
 
+    public void initiateForgotPassword(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found with this email"));
+
+        String otp = String.format("%06d", new Random().nextInt(999999));
+        user.setMfaCode(otp);
+        user.setMfaExpiresAt(LocalDateTime.now().plusMinutes(10));
+        userRepository.save(user);
+
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(fromEmail);
+        message.setTo(email);
+        message.setSubject("Password Reset Verification Code");
+        message.setText("Your verification code to reset your password is: " + otp + "\nThis code will expire in 10 minutes.");
+        mailSender.send(message);
+    }
+
+    public void resetPassword(String email, String code, String newPassword) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.getMfaCode() == null || !user.getMfaCode().equals(code)) {
+            throw new InvalidCredentialsException();
+        }
+
+        if (user.getMfaExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Verification code expired");
+        }
+
+        // Update password and clear MFA
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setMfaCode(null);
+        user.setMfaExpiresAt(null);
+        userRepository.save(user);
+    }
+
     public AuthResponse googleLogin(GoogleLoginRequest request) {
         String clientId = "619356278570-78j5d2dh4sumdou8ebdd4d5ijpqv8kkh.apps.googleusercontent.com";
         GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
