@@ -6,6 +6,7 @@ import com.ticketapp.projetpi.repository.UserRepository;
 import com.ticketapp.projetpi.service.SessionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -42,5 +43,15 @@ public class SessionController {
     @GetMapping("/current/jti")
     public ResponseEntity<String> getCurrentSessionJti(@AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.ok(jwt.getId());
+    }
+
+    @GetMapping("/user/{userId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<UserSession>> getUserSessionsForAdmin(@PathVariable UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        List<UserSession> sessions = sessionService.getUserSessions(user);
+        return ResponseEntity.ok(sessions);
     }
 }
