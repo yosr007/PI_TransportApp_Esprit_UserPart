@@ -69,7 +69,7 @@ public class SessionService {
         });
     }
 
-    private String getClientIp(HttpServletRequest request) {
+    public String getClientIp(HttpServletRequest request) {
         String xForwardedFor = request.getHeader("X-Forwarded-For");
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
             return xForwardedFor.split(",")[0].trim();
@@ -77,7 +77,7 @@ public class SessionService {
         return request.getRemoteAddr();
     }
 
-    private String fetchLocation(String ip) {
+    public String fetchLocation(String ip) {
         try {
             if (ip.equals("127.0.0.1") || ip.startsWith("0:0")) return "Localhost";
             
@@ -117,7 +117,7 @@ public class SessionService {
         return "Browser";
     }
 
-    private String parseDevice(String ua) {
+    public String parseDevice(String ua) {
         if (ua == null) return "Unknown";
         ua = ua.toLowerCase();
         if (ua.contains("mobile") || ua.contains("android") || ua.contains("iphone")) return "Mobile";

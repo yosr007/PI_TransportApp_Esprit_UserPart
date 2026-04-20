@@ -25,7 +25,7 @@ public class AuthResponse {
         this.mfaRequired = mfaRequired;
     }
 
-    public AuthResponse(String token, long expiresIn, UUID userId, String email, String role, String profilePic, String username) {
+    public AuthResponse(String token, long expiresIn, UUID userId, String email, String role, String profilePic, String username, boolean mfaRequired) {
         this.token = token;
         this.expiresIn = expiresIn;
         this.userId = userId;
@@ -33,6 +33,7 @@ public class AuthResponse {
         this.role = role;
         this.profilePic = profilePic;
         this.username = username;
+        this.mfaRequired = mfaRequired;
     }
 
     public AuthResponse(String token, long expiresIn, UUID userId, String email, String role) {

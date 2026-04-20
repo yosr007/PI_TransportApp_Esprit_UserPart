@@ -15,6 +15,7 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -23,6 +24,7 @@ import java.util.Random;
 import java.util.UUID;
 
 @Service
+@Slf4j
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -31,6 +33,8 @@ public class AuthService {
     private final FileStorageService fileStorageService;
     private final JavaMailSender mailSender;
     private final SessionService sessionService;
+    private final AnomalyDetectionServiceClient anomalyDetectionService;
+    private final com.ticketapp.projetpi.repository.SecurityAlertRepository alertRepository;
     private final jakarta.servlet.http.HttpServletRequest request;
 
     @Value("${jwt.expiration}")
@@ -45,6 +49,8 @@ public class AuthService {
                        FileStorageService fileStorageService,
                        JavaMailSender mailSender,
                        SessionService sessionService,
+                       AnomalyDetectionServiceClient anomalyDetectionService,
+                       com.ticketapp.projetpi.repository.SecurityAlertRepository alertRepository,
                        jakarta.servlet.http.HttpServletRequest request) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -52,6 +58,8 @@ public class AuthService {
         this.fileStorageService = fileStorageService;
         this.mailSender = mailSender;
         this.sessionService = sessionService;
+        this.anomalyDetectionService = anomalyDetectionService;
+        this.alertRepository = alertRepository;
         this.request = request;
     }
 
@@ -83,7 +91,7 @@ public class AuthService {
         sessionService.createSession(user, jti, this.request);
 
         String token = jwtService.generateToken(user, jti);
-        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername());
+        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername(), false);
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -91,6 +99,18 @@ public class AuthService {
                 .orElseThrow(InvalidCredentialsException::new);
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            user.setFailedLoginAttempts(user.getFailedLoginAttempts() + 1);
+            userRepository.save(user);
+            
+            // Trigger alert on brute force attempt (3+ failures)
+            if (user.getFailedLoginAttempts() >= 3) {
+                String ip = sessionService.getClientIp(this.request);
+                String location = sessionService.fetchLocation(ip);
+                saveSecurityAlert(user, "Brute Force Attempt", 
+                    String.format("Multiple failed login attempts detected (%d) from %s", 
+                        user.getFailedLoginAttempts(), location), -1.0);
+            }
+            
             throw new InvalidCredentialsException();
         }
 
@@ -114,8 +134,30 @@ public class AuthService {
                     isMfaRequired = true;
                 }
             }
+
+            // AI Anomaly Detection Rule
+            String ip = sessionService.getClientIp(this.request);
+            String userAgent = this.request.getHeader("User-Agent");
+            String location = sessionService.fetchLocation(ip);
+            String device = sessionService.parseDevice(userAgent);
+
+            AnomalyDetectionServiceClient.AnalysisResponse response = anomalyDetectionService.analyze(user, device, location, user.getFailedLoginAttempts());
+            
+            if (response != null) {
+                log.info("AI Analysis Response: isAnomaly={}, score={}", response.is_anomaly(), response.getConfidence());
+                if (response.is_anomaly()) {
+                    isMfaRequired = true;
+                    saveSecurityAlert(user, "Behavioral Anomaly", 
+                        String.format("Suspicious successful login from %s using %s. Score: %.4f", 
+                            location, device, response.getConfidence()), 
+                        response.getConfidence());
+                }
+            } else {
+                log.warn("AI Analysis Service returned NULL or timed out for user: {}", user.getEmail());
+            }
         }
 
+        log.info("Final Login Decision: email={}, isMfaRequired={}", user.getEmail(), isMfaRequired);
         if (isMfaRequired) {
             String otp = String.format("%06d", new Random().nextInt(999999));
             user.setMfaCode(otp);
@@ -124,18 +166,19 @@ public class AuthService {
 
             sendOtpEmail(user.getEmail(), otp);
 
-            return new AuthResponse(user.getEmail(), true);
+            return new AuthResponse(null, 0, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername(), true);
         }
 
         // Standard Login
         user.setLastLoginAt(LocalDateTime.now());
+        user.setFailedLoginAttempts(0); // Reset failures
         userRepository.save(user);
         
         String jti = UUID.randomUUID().toString();
         sessionService.createSession(user, jti, this.request);
         
         String token = jwtService.generateToken(user, jti);
-        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername());
+        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername(), false);
     }
 
     private void sendOtpEmail(String email, String otp) {
@@ -169,7 +212,7 @@ public class AuthService {
         sessionService.createSession(user, jti, this.request);
 
         String token = jwtService.generateToken(user, jti);
-        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername());
+        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername(), false);
     }
 
     public void logout(String email, String jti) {
@@ -264,11 +307,48 @@ public class AuthService {
             String jti = UUID.randomUUID().toString();
             sessionService.createSession(user, jti, this.request);
 
+            // AI Anomaly Detection for Google Login
+            String ip = sessionService.getClientIp(this.request);
+            String userAgent = this.request.getHeader("User-Agent");
+            String location = sessionService.fetchLocation(ip);
+            String device = sessionService.parseDevice(userAgent);
+            
+            boolean isMfaRequired = false;
+            AnomalyDetectionServiceClient.AnalysisResponse response = anomalyDetectionService.analyze(user, device, location, 0);
+            
+            if (response != null && response.is_anomaly()) {
+                // For Google login, we record the alert for the admin dashboard
+                // but we might not always force MFA since Google has its own 2FA
+                saveSecurityAlert(user, "Social Login Anomaly", 
+                    String.format("Suspicious Google login from %s using %s. Score: %.4f", 
+                        location, device, response.getConfidence()), 
+                    response.getConfidence());
+                
+                // If you want to force MFA even for Google users, set this to true:
+                // isMfaRequired = true; 
+            }
+
             String token = jwtService.generateToken(user, jti);
-            return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername());
+            return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername(), isMfaRequired);
 
         } catch (Exception e) {
             throw new InvalidCredentialsException();
+        }
+    }
+
+    private void saveSecurityAlert(User user, String type, String details, double score) {
+        log.info("PREPARING to save security alert: type={}, user={}", type, user.getEmail());
+        try {
+            com.ticketapp.projetpi.entity.SecurityAlert alert = com.ticketapp.projetpi.entity.SecurityAlert.builder()
+                    .user(user)
+                    .anomalyType(type)
+                    .details(details)
+                    .riskScore(score)
+                    .build();
+            alertRepository.saveAndFlush(alert);
+            log.info("SUCCESS: Security alert [{}] saved and flushed for user: {}", type, user.getEmail());
+        } catch (Exception e) {
+            log.error("CRITICAL ERROR saving security alert: {}", e.getMessage(), e);
         }
     }
 }

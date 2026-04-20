@@ -50,6 +50,9 @@ public class User {
     private String mfaCode;
     private LocalDateTime mfaExpiresAt;
 
+    @Column(nullable = false)
+    private int failedLoginAttempts = 0;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
