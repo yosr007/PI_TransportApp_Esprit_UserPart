@@ -182,12 +182,20 @@ public class AuthService {
     }
 
     private void sendOtpEmail(String email, String otp) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromEmail);
-        message.setTo(email);
-        message.setSubject("Your Login Verification Code");
-        message.setText("Your verification code is: " + otp + "\nThis code will expire in 10 minutes.");
-        mailSender.send(message);
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromEmail);
+            message.setTo(email);
+            message.setSubject("Your Login Verification Code");
+            message.setText("Your verification code is: " + otp + "\nThis code will expire in 10 minutes.");
+            mailSender.send(message);
+            log.info("OTP Email sent successfully to: {}", email);
+        } catch (Exception e) {
+            log.error("CRITICAL: Failed to send OTP email to {}: {}. Login will continue but user won't receive code.", 
+                email, e.getMessage());
+            // We don't rethrow to avoid 500 error, allowing the user to see the MFA screen 
+            // even if mail delivery failed (useful for local debugging).
+        }
     }
 
     public AuthResponse verifyMfa(String email, String code) {
@@ -350,5 +358,17 @@ public class AuthService {
         } catch (Exception e) {
             log.error("CRITICAL ERROR saving security alert: {}", e.getMessage(), e);
         }
+    }
+
+    public AuthResponse generateAuthResponse(User user) {
+        user.setLastLoginAt(LocalDateTime.now());
+        user.setFailedLoginAttempts(0);
+        userRepository.save(user);
+
+        String jti = UUID.randomUUID().toString();
+        sessionService.createSession(user, jti, this.request);
+
+        String token = jwtService.generateToken(user, jti);
+        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername(), false);
     }
 }

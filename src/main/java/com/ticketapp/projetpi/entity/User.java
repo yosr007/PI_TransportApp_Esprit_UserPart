@@ -49,6 +49,8 @@ public class User {
     private LocalDateTime lastLogoutAt;
     private String mfaCode;
     private LocalDateTime mfaExpiresAt;
+    
+    private String faceIdPath;
 
     @Column(nullable = false)
     private int failedLoginAttempts = 0;
