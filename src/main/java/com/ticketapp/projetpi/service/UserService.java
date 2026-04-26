@@ -2,6 +2,7 @@ package com.ticketapp.projetpi.service;
 
 import com.ticketapp.projetpi.dto.UpdateUserRequest;
 import com.ticketapp.projetpi.dto.UserResponse;
+import com.ticketapp.projetpi.entity.Role;
 import com.ticketapp.projetpi.entity.User;
 import com.ticketapp.projetpi.exception.UserNotFoundException;
 import com.ticketapp.projetpi.repository.UserRepository;
@@ -31,6 +32,12 @@ public class UserService {
     public UserResponse getUserByEmail(String email) {
         return toResponse(userRepository.findByEmail(email)
                 .orElseThrow(() -> new UserNotFoundException(email)));
+    }
+    public List<UserResponse> getUsersByRole(Role role) {
+        return userRepository.findByRole(role)
+                .stream()
+                .map(this::toResponse)   // reuse whatever mapping method you already have
+                .toList();
     }
 
     public List<UserResponse> getAllUsers() {
