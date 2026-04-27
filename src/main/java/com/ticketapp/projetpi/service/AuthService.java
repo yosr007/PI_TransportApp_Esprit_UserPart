@@ -84,14 +84,19 @@ public class AuthService {
         }
 
         user.setRole(Role.USER);
-
         userRepository.save(user);
 
-        String jti = UUID.randomUUID().toString();
-        sessionService.createSession(user, jti, this.request);
+        // --- Require 2FA (Email Verification) immediately after registration ---
+        String otp = String.format("%06d", new Random().nextInt(999999));
+        user.setMfaCode(otp);
+        user.setMfaExpiresAt(LocalDateTime.now().plusMinutes(10));
+        userRepository.save(user);
 
-        String token = jwtService.generateToken(user, jti);
-        return new AuthResponse(token, expiration, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername(), false);
+        sendOtpEmail(user.getEmail(), otp);
+
+        log.info("Registration successful, requiring 2FA for user: {}", user.getEmail());
+
+        return new AuthResponse(null, 0, user.getId(), user.getEmail(), user.getRole().name(), user.getProfilePic(), user.getUsername(), true);
     }
 
     public AuthResponse login(LoginRequest request) {
